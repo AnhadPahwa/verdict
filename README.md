@@ -126,7 +126,7 @@ Filled in as each milestone completes. No numbers appear here until they've been
 _Available from M5. Planned:_
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/AnhadPahwa/verdict
 cd verdict
 docker compose up
 ```
