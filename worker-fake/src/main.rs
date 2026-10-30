@@ -1,9 +1,23 @@
 use axum::{
-    routing::post,
-    Router,
+    Json, Router, routing::post,
 };
 
 use tokio::net::TcpListener;
+use serde::Deserialize;
+
+#[derive(Deserialize, Debug)]
+struct DecideRequest {
+    input: String,
+    question: Question
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum Question {
+    Choice {options: Vec<String>},
+    YesNo ,
+    Score {min: i8, max: i8, labels: Option<Vec<String>>}
+}
 
 #[tokio::main]
 async fn main() {
@@ -17,6 +31,6 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn decide_handler() -> &'static str {
-    "ok"
+async fn decide_handler(Json(req):Json<DecideRequest>) -> String {
+    format!("{:?}", req)
 }

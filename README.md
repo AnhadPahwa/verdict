@@ -149,6 +149,7 @@ Every error response has the body `{"error": "<human-readable message>"}`.
 - **`expected`** is computed from the probabilities as returned, so a client can reproduce it from the response. It must match within ±0.001. It is absent, not `null`, for `choice` and `yes_no`.
 - **Ties** are exact equality only: 0.4 and 0.40000001 are not tied.
 - **`input` length** is measured in UTF-8 bytes of the decoded string, not characters: 4,096 `é` is 8,192 bytes.
+- **`min` and `max`** must be between -128 and 127
 - **`min` and `max`** must be JSON integers; `1.0` is rejected with 422.
 - **Duplicate options** are exact, case-sensitive matches: `"Billing"` and `"billing"` are different options.
 - **`labels`** must be non-empty and unique. `"labels": null` is the same as leaving the field out.
