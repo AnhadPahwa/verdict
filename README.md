@@ -43,11 +43,13 @@ Workers are interchangeable behind the `/decide` contract:
 | Now | Fake worker — simulates single-pass latency that scales with input length and option count |
 | Later | Real model — from-scratch transformer with a decision head, served via `candle` |
 
-## The `/decide` contract (draft v0)
+## The `/decide` contract (v1)
 
-This contract stays fixed when workers are swapped, so the gateway never changes.
+This contract stays fixed when workers are swapped, so the gateway never changes. Workers and the gateway both speak it.
 
-**Request**
+`POST /decide` with `content-type: application/json`.
+
+### Request
 
 ```json
 {
@@ -59,15 +61,38 @@ This contract stays fixed when workers are swapped, so the gateway never changes
 }
 ```
 
-Question types:
+| Field | Rules |
+| --- | --- |
+| `input` | String, 1–8,192 bytes (UTF-8) |
+| `question.type` | One of `choice`, `yes_no`, `score` |
 
-| Type | Options | Example |
-| --- | --- | --- |
-| `choice` | Declared list | Which team should handle this ticket? |
-| `yes_no` | Implicit: `yes`, `no` | Is this message urgent? |
-| `score` | Integer scale, e.g. 1–5 | How positive is this review? |
+Unknown fields are ignored, so optional fields can be added later without breaking older clients.
 
-**Response**
+### Question types
+
+| Type | Fields | Options, in declared order | Example |
+| --- | --- | --- | --- |
+| `choice` | `options`: 2–32 unique, non-empty strings | As listed | Which team should handle this ticket? |
+| `yes_no` | None | `yes`, `no` | Is this message urgent? |
+| `score` | `min`, `max`: integers (may be negative), with 1 ≤ `max` − `min` ≤ 10. Optional `labels`: exactly `max` − `min` + 1 strings, one per point from `min` upwards | Each integer from `min` to `max` | How positive is this review? |
+
+Score request:
+
+```json
+{
+  "input": "Arrived a day late but works perfectly. Would buy again.",
+  "question": {
+    "type": "score",
+    "min": 1,
+    "max": 5,
+    "labels": ["terrible", "bad", "ok", "good", "great"]
+  }
+}
+```
+
+`labels` describe what each point means. They are passed to the model and do not change the response shape.
+
+### Response
 
 ```json
 {
@@ -82,6 +107,57 @@ Question types:
   "latency_ms": 212
 }
 ```
+
+| Field | Rules |
+| --- | --- |
+| `type` | Same as the request's `question.type` |
+| `probabilities` | One entry per option, each between 0 and 1, summing to 1 (±0.001). For `score`, keys are the integers as strings, e.g. `"1"` … `"5"` |
+| `answer` | The most probable option, always a string that is a key of `probabilities`. Ties go to the first option in declared order: the first listed for `choice`, `yes` for `yes_no`, the lowest value for `score` |
+| `expected` | `score` only. The probability-weighted mean of the scale, as a number |
+| `model` | Non-empty string naming the model that answered |
+| `latency_ms` | Time the worker spent on the request, in milliseconds, as a non-negative number |
+
+Score response:
+
+```json
+{
+  "type": "score",
+  "probabilities": { "1": 0.02, "2": 0.03, "3": 0.10, "4": 0.45, "5": 0.40 },
+  "answer": "4",
+  "expected": 4.18,
+  "model": "fake-v0",
+  "latency_ms": 198
+}
+```
+
+`answer` is the single most likely value; `expected` summarises the whole distribution. When they disagree a lot, for example on a split 1-or-5 opinion, read `probabilities`.
+
+### Errors
+
+Every error response has the body `{"error": "<human-readable message>"}`.
+
+| Status | When |
+| --- | --- |
+| `400 Bad Request` | The body is not valid JSON |
+| `415 Unsupported Media Type` | `content-type` is not `application/json` |
+| `422 Unprocessable Entity` | Valid JSON that breaks a rule above: wrong field types, an unknown `type`, `min` ≥ `max`, a range over 11 points, a `labels` length mismatch, fewer than 2 or more than 32 options, duplicate options, or `input` outside 1–8,192 bytes |
+| `502 Bad Gateway` | Gateway only: no worker could be reached |
+| `504 Gateway Timeout` | Gateway only: the worker did not answer in time |
+
+### Clarifications
+
+- **`expected`** is computed from the probabilities as returned, so a client can reproduce it from the response. It must match within ±0.001. It is absent, not `null`, for `choice` and `yes_no`.
+- **Ties** are exact equality only: 0.4 and 0.40000001 are not tied.
+- **`input` length** is measured in UTF-8 bytes of the decoded string, not characters: 4,096 `é` is 8,192 bytes.
+- **`min` and `max`** must be JSON integers; `1.0` is rejected with 422.
+- **Duplicate options** are exact, case-sensitive matches: `"Billing"` and `"billing"` are different options.
+- **`labels`** must be non-empty and unique. `"labels": null` is the same as leaving the field out.
+- **Missing required fields** (`input`, `question`, `options`, `min`, `max`) are rejected with 422.
+- **Unknown fields** are ignored everywhere, including an `options` field on a `yes_no` question.
+- **`content-type`** parameters are accepted: `application/json; charset=utf-8` is valid.
+- **Key order** in `probabilities` is not meaningful. "Declared order" only decides ties.
+- **When several rules break**, the first applicable error wins: 415, then 400, then 422.
+- **Error responses** are served as `application/json` and always contain a non-empty `error` string. Other fields may be added later; clients should ignore fields they don't recognise.
 
 ## Roadmap
 
