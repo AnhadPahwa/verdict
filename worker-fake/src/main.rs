@@ -1,5 +1,5 @@
 use axum::{
-    Json, Router, extract::{State, rejection::{self, JsonRejection}}, http::{StatusCode, uri::PathAndQuery}, response::IntoResponse, routing::post,
+    Json, Router, extract::{rejection::{JsonRejection}}, http::{StatusCode}, response::IntoResponse, routing::post,
 };
 
 use tokio::net::TcpListener;
@@ -38,6 +38,19 @@ impl IntoResponse for ApiError {
     }
 }
 
+impl ApiError {
+    fn unprocessable(message: impl Into<String>) -> Self {
+        Self { status: StatusCode::UNPROCESSABLE_ENTITY, message: message.into() }
+    }
+}
+
+fn validate(req: &DecideRequest) -> Result<(), ApiError> {
+    if !(1..=8192).contains(&req.input.len()){
+        return Err(ApiError:: unprocessable(format!("input must be 1–8192 bytes, got {}", req.input.len())));
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() {
     // define router with POST/decide route
@@ -53,12 +66,11 @@ async fn main() {
 async fn decide_handler(payload: Result<Json<DecideRequest>, JsonRejection>) -> Result<String, ApiError> {
     match payload {
         Ok(Json(req)) => {
+            validate(&req)?;
             Ok(format!("{:?}", req))
         }
         Err(rejection) => {
             Err(ApiError { status: rejection.status(), message: rejection.body_text() })
-        }
-        
-    }
-    
+        }       
+    }  
 }
