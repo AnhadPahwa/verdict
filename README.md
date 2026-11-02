@@ -140,7 +140,7 @@ Every error response has the body `{"error": "<human-readable message>"}`.
 | --- | --- |
 | `400 Bad Request` | The body is not valid JSON |
 | `415 Unsupported Media Type` | `content-type` is not `application/json` |
-| `422 Unprocessable Entity` | Valid JSON that breaks a rule above: wrong field types, an unknown `type`, `min` ≥ `max`, a range over 11 points, a `labels` length mismatch, fewer than 2 or more than 32 options, duplicate options, or `input` outside 1–8,192 bytes |
+| `422 Unprocessable Entity` | Valid JSON that breaks a rule above: wrong field types, an unknown `type`, `min` ≥ `max`, a range over 11 points, a `labels` length mismatch, fewer than 2 or more than 32 options, duplicate or empty options, or `input` outside 1–8,192 bytes |
 | `502 Bad Gateway` | Gateway only: no worker could be reached |
 | `504 Gateway Timeout` | Gateway only: the worker did not answer in time |
 

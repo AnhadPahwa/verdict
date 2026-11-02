@@ -68,21 +68,51 @@ fn validate(req: &DecideRequest) -> Result<(), ApiError> {
                     options.len()
                 )));
             }
-            let mut seen: HashSet<&String> = HashSet::new();
-            for (i, option) in options.iter().enumerate() {
-                if option.is_empty() {
-                    return Err(ApiError::unprocessable(format!("option {} is empty", i)));
-                }
-                if !seen.insert(option) {
-                    return Err(ApiError::unprocessable(format!(
-                        "duplicate option \"{}\"",
-                        option
-                    )));
-                }
-            }
+            check_unique_non_empty(options, "option")?;
         }
         Question::YesNo => {}
-        Question::Score { .. } => {}
+        Question::Score { min, max, labels } => {
+            if max <= min {
+                return Err(ApiError::unprocessable(format!(
+                    "min must be less than max, got min {}, max {}",
+                    min, max
+                )));
+            }
+            let width = i16::from(*max) - i16::from(*min);
+            if width > 10 {
+                return Err(ApiError::unprocessable(format!(
+                    "score scale must have at most 11 points, got {}",
+                    width + 1
+                )));
+            }
+            if let Some(labels) = labels {
+                let points = width + 1;
+                if points as usize != labels.len() {
+                    return Err(ApiError::unprocessable(format!(
+                        "score scale and number of labels do not match, got {} points, {} labels",
+                        points,
+                        labels.len()
+                    )));
+                }
+                check_unique_non_empty(labels, "label")?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn check_unique_non_empty(items: &[String], what: &str) -> Result<(), ApiError> {
+    let mut seen: HashSet<&String> = HashSet::new();
+    for (i, item) in items.iter().enumerate() {
+        if item.is_empty() {
+            return Err(ApiError::unprocessable(format!("{} {} is empty", what, i)));
+        }
+        if !seen.insert(item) {
+            return Err(ApiError::unprocessable(format!(
+                "duplicate {} \"{}\"",
+                what, item
+            )));
+        }
     }
     Ok(())
 }
