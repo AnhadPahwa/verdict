@@ -6,7 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Deserialize, Debug)]
 struct DecideRequest {
@@ -17,9 +17,15 @@ struct DecideRequest {
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum Question {
-    Choice {options: Vec<String>},
-    YesNo ,
-    Score {min: i8, max: i8, labels: Option<Vec<String>>}
+    Choice {
+        options: Vec<String>,
+    },
+    YesNo,
+    Score {
+        min: i8,
+        max: i8,
+        labels: Option<Vec<String>>,
+    },
 }
 
 #[derive(Serialize)]
@@ -117,6 +123,28 @@ fn check_unique_non_empty(items: &[String], what: &str) -> Result<(), ApiError> 
     Ok(())
 }
 
+#[derive(Serialize)]
+struct DecideResponse {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected: Option<f64>,
+    probabilities: HashMap<String, f64>,
+    answer: String,
+    model: String,
+    latency_ms: f64,
+}
+
+fn options_in_order(question: &Question) -> Vec<String> {
+    match question {
+        Question::Choice { options } => options.clone(),
+        Question::YesNo => {
+            vec!["yes".to_string(), "no".to_string()]
+        }
+        Question::Score { min, max, .. } => (*min..=*max).map(|v| v.to_string()).collect(),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     // define router with POST/decide route
@@ -133,14 +161,52 @@ async fn main() {
 
 async fn decide_handler(
     payload: Result<Json<DecideRequest>, JsonRejection>,
-) -> Result<String, ApiError> {
+) -> Result<Json<DecideResponse>, ApiError> {
     match payload {
         Ok(Json(req)) => {
             validate(&req)?;
-            Ok(format!("{:?}", req))
+            let options = options_in_order(&req.question);
+            let probability = 1.0 / options.len() as f64;
+            let mut probabilities: HashMap<String, f64> = HashMap::new();
+            let mut answer = &options[0];
+            for option in &options {
+                probabilities.insert(option.clone(), probability);
+                if probabilities[option] > probabilities[answer] {
+                    answer = option;
+                }
+            }
+
+            let expected = match &req.question {
+                Question::Score { min, max, .. } => {
+                    let mut sum = 0.0;
+                    for value in *min..=*max {
+                        let v = value as f64;
+                        sum += v * probabilities[&value.to_string()];
+                    }
+                    Some(sum)
+                }
+                _ => None,
+            };
+
+            let kind = match &req.question {
+                Question::Choice { .. } => "choice".to_string(),
+                Question::YesNo => "yes_no".to_string(),
+                Question::Score { .. } => "score".to_string(),
+            };
+
+            let response = DecideResponse {
+                kind,
+                expected,
+                probabilities,
+                answer: answer.clone(),
+                model: "fake_v0".to_string(),
+                latency_ms: 0.0,
+            };
+
+            Ok(Json(response))
         }
         Err(rejection) => {
             Err(ApiError {status: rejection.status(), message: rejection.body_text()})
-        }       
-    }  
+        },
+    }
 }
