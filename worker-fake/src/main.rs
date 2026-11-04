@@ -5,6 +5,8 @@
 //! later by a worker serving the trained model behind the same contract
 
 use std::collections::{HashMap, HashSet};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::time::{Duration, Instant};
 
 use axum::{
     Json, Router,
@@ -15,6 +17,14 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
+
+// ---------------------------------------------------------------------------
+// Fake model parameters: the simulated cost of one forward pass in microseconds
+// ---------------------------------------------------------------------------
+
+const BASE_MS: u64 = 20000; // Base cost of one forward pass
+const COST_PER_BYTE: u64 = 10; // Cost per byte of input
+const COST_PER_OPTION: u64 = 2000; // Cost per option in the question
 
 // ---------------------------------------------------------------------------
 // Contract types: the request and response shapes from the README.
@@ -122,6 +132,7 @@ async fn decide_handler(
     // reformatted as contract JSON instead of axum's plain-text default
     payload: Result<Json<DecideRequest>, JsonRejection>,
 ) -> Result<Json<DecideResponse>, ApiError> {
+    let start = Instant::now();
     match payload {
         Ok(Json(req)) => {
             validate(&req)?;
@@ -130,12 +141,28 @@ async fn decide_handler(
             // order, so the rest of the handler doesn't care which type it was
             let options = options_in_order(&req.question);
 
-            // Stage 1: every option gets the same probability
-            let probability = 1.0 / options.len() as f64;
+            // Stage 2: compute normalised hash weights for each option
+            let mut total = 0.0;
+            for option in &options {
+                let w = weight(&req.input, option);
+                total += w;
+            }
             let mut probabilities: HashMap<String, f64> = HashMap::new();
             for option in &options {
-                probabilities.insert(option.clone(), probability);
+                // called weight again instead of storing values in the previous for loop
+                // to avoid creating a separate Vec to keep in step with options
+                probabilities.insert(option.clone(), weight(&req.input, option) / total);
             }
+
+            // simulate the model’s forward-pass cost (see the fake model parameters)
+            let micros = BASE_MS
+                + (COST_PER_BYTE * req.input.len() as u64)
+                + (options.len() as u64 * COST_PER_OPTION);
+            let duration = Duration::from_micros(micros);
+
+            // Invalid requests are rejected before this point without sleeping,
+            // as a real model server would reject them before running inference
+            tokio::time::sleep(duration).await;
 
             // Safe to index [0]: validate guarantees at least 2 options.
             // Replace only on strictly greater, so the first option wins ties.
@@ -172,7 +199,7 @@ async fn decide_handler(
                 probabilities,
                 answer: answer.clone(),
                 model: "fake-v0".to_string(),
-                latency_ms: 0.0,
+                latency_ms: start.elapsed().as_secs_f64() * 1000.0,
             }))
         }
         // Keep axum's status code and message; only the format changes
@@ -275,4 +302,17 @@ fn options_in_order(question: &Question) -> Vec<String> {
         Question::YesNo => vec!["yes".to_string(), "no".to_string()],
         Question::Score { min, max, .. } => (*min..=*max).map(|v| v.to_string()).collect(),
     }
+}
+
+// The normalised hash weights for the option
+fn weight(input: &str, option: &str) -> f64 {
+    let mut hasher = DefaultHasher::new();
+
+    input.hash(&mut hasher);
+    option.hash(&mut hasher);
+
+    let n: u64 = hasher.finish();
+
+    // Result is stable between versions, not guaranteed between different Rust verisons
+    (n % 1000) as f64 + 1.0
 }
