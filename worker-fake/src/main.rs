@@ -22,7 +22,7 @@ use tokio::net::TcpListener;
 // Fake model parameters: the simulated cost of one forward pass in microseconds
 // ---------------------------------------------------------------------------
 
-const BASE_MS: u64 = 20000; // Base cost of one forward pass
+const BASE_US: u64 = 20000; // Base cost of one forward pass
 const COST_PER_BYTE: u64 = 10; // Cost per byte of input
 const COST_PER_OPTION: u64 = 2000; // Cost per option in the question
 
@@ -155,7 +155,7 @@ async fn decide_handler(
             }
 
             // simulate the model’s forward-pass cost (see the fake model parameters)
-            let micros = BASE_MS
+            let micros = BASE_US
                 + (COST_PER_BYTE * req.input.len() as u64)
                 + (options.len() as u64 * COST_PER_OPTION);
             let duration = Duration::from_micros(micros);

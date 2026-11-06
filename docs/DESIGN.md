@@ -36,12 +36,32 @@ alternatives considered, and the evidence. The contract itself is in the
 
 ## 2. Fake worker model
 
-**Context:** [Why a fake worker exists at all before the model does.]
+**Context:** The real model doesn't exist yet, but the gateway needs something behind it to build and benchmark against. The fake worker implements the full `/decide` contract and simulates a model's behaviour.
 
-**Decision:** [Latency formula with your constants; hashed probabilities.]
+**Decision (latency model):** Each request sleeps for a simulated forward-pass cost:
 
-**Alternatives:** [Fixed latency; random probabilities; and why not.]
+latency = base + (input bytes × per-byte cost) + (options × per-option cost)
 
-**Consequences:** [Fast rejects; nearly flat probabilities; hasher stability.]
+- Base: 20 ms, the fixed cost of any forward pass, whatever the input.
+- Per byte: 10 µs, because reading a longer input takes longer.
+- Per option: 2 ms, the cost of scoring each declared option.
 
-**Evidence:** [Predicted vs measured latency for choice_short.json, and why they differ.]
+These values were chosen to give realistic-looking latencies in the tens of milliseconds. They are not measured from a real model.
+
+**Alternatives (latency):**
+- Fixed latency for every request: `choice_short` and `choice_long` would cost exactly the same, so benchmarks couldn't show how payload size affects throughput and latency, which the M6 batching results depend on.
+
+**Decision (probabilities):** Each option's weight comes from hashing the input together with the option, and weights are normalised so the probabilities sum to 1. The same request always gets the same probabilities; changing one character of the input reshuffles them.
+
+**Alternatives (probabilities):**
+- Random probabilities: the worker would give a different answer every time it is asked. Once the M2 cache exists, a cache hit and a cache miss would then return different answers to the same request, so the cache would change the system's behaviour rather than only its speed. Results would also not be reproducible across test and benchmark runs.
+
+**Decision (fast rejects):** Invalid requests are rejected before the simulated forward pass, without sleeping, because a real model server would reject them before running inference.
+
+**Consequences:**
+- The probabilities are nearly flat: the first `choice_short` test with 3 options gave 0.31, 0.34 and 0.35. A real model is usually more decisive.
+- `DefaultHasher` is stable between runs of the same build, but not guaranteed across Rust versions, so the exact probabilities may change after a toolchain upgrade.
+- In a real transformer, attention cost grows roughly with the square of the input length (in tokens), so a linear per-byte cost understates the latency of long inputs.
+- Benchmarks should mostly use valid requests: invalid ones measure validation code, not the simulated model.
+
+**Evidence:** For `choice_short.json` (42 bytes, 3 options) the formula predicts 20 + (42 × 0.01) + (3 × 2) = 26.42 ms. Two identical requests measured 27.80 ms and 28.11 ms, about 1.4–1.7 ms above the prediction. The gap comes from Tokio's timer, which works at roughly 1 ms resolution so sleeps round up, plus the time the handler spends hashing, building the response and serializing it. The 0.3 ms difference between the two identical requests is run-to-run jitter, which is why benchmarks report p50 and p99 over many requests rather than single measurements.
