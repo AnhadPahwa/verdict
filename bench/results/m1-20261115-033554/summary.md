@@ -1,0 +1,26 @@
+| run | req/s | p50 ms | p99 ms | success |
+| --- | ---: | ---: | ---: | ---: |
+| worker_choice_long_c1 | 22 | 44.82 | 48.55 | 100% |
+| gateway_choice_long_c1 | 21 | 45.39 | 46.62 | 100% |
+| worker_choice_long_c8 | 177 | 45.08 | 46.72 | 100% |
+| gateway_choice_long_c8 | 174 | 45.82 | 47.66 | 100% |
+| worker_choice_long_c32 | 701 | 45.7 | 48.26 | 100% |
+| gateway_choice_long_c32 | 682 | 47.03 | 49.74 | 100% |
+| worker_choice_long_c128 | 2780 | 45.76 | 50.68 | 100% |
+| gateway_choice_long_c128 | 2713 | 46.77 | 53.42 | 100% |
+| worker_choice_short_c1 | 34 | 28.65 | 30.33 | 100% |
+| gateway_choice_short_c1 | 34 | 29.04 | 31.29 | 100% |
+| worker_choice_short_c8 | 275 | 28.81 | 30.25 | 100% |
+| gateway_choice_short_c8 | 269 | 29.55 | 31.6 | 100% |
+| worker_choice_short_c32 | 1089 | 29.34 | 31.65 | 100% |
+| gateway_choice_short_c32 | 1040 | 30.73 | 34.44 | 100% |
+| worker_choice_short_c128 | 4286 | 29.64 | 34.32 | 100% |
+| gateway_choice_short_c128 | 4193 | 30.13 | 36.04 | 100% |
+| worker_yes_no_c1 | 37 | 26.92 | 28.34 | 100% |
+| gateway_yes_no_c1 | 36 | 27.35 | 28.51 | 100% |
+| worker_yes_no_c8 | 294 | 27.01 | 28.25 | 100% |
+| gateway_yes_no_c8 | 288 | 27.63 | 29.65 | 100% |
+| worker_yes_no_c32 | 1166 | 27.44 | 30.41 | 100% |
+| gateway_yes_no_c32 | 1115 | 28.66 | 31.8 | 100% |
+| worker_yes_no_c128 | 4542 | 27.77 | 33.2 | 100% |
+| gateway_yes_no_c128 | 4472 | 28.37 | 33.18 | 100% |

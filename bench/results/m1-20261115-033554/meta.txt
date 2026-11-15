@@ -1,0 +1,5 @@
+git:      ec34eb9
+date:     2026-11-15T03:35:54Z
+host:     Darwin arm64, 8 cpus
+duration: 15s   concurrency: 1 8 32 128
+gateway:  http://127.0.0.1:8080   worker: http://127.0.0.1:9001
