@@ -2,7 +2,7 @@
 
 Rust serving platform for a from-scratch, calibrated decision model, built and measured in stages to explore system design trade-offs.
 
-> **Status:** In progress: Phase 0 (setup). Nothing below the roadmap is built yet; benchmark tables fill in as milestones complete.
+> **Status:** M1 complete: Rust gateway forwarding to a fake worker, with a measured baseline. Next: M2 (response cache).
 
 ## What it is
 
@@ -163,10 +163,10 @@ Every error response has the body `{"error": "<human-readable message>"}`.
 ## Roadmap
 
 ### Phase 1 — Rust foundations
-- [ ] Rust Book (core chapters) and Tokio tutorial
+- [x] Rust Book (core chapters) and Tokio tutorial
 
 ### Phase 2 — Local systems project
-- [ ] **M1** Gateway forwards to one fake worker; baseline throughput and p50/p99 latency
+- [x] **M1** Gateway forwards to one fake worker; baseline throughput and p50/p99 latency
 - [ ] **M2** Response cache with expiry
 - [ ] **M3** Three workers, round-robin load balancing, health checks
 - [ ] **M4** Token-bucket rate limiter
@@ -191,7 +191,7 @@ Filled in as each milestone completes. No numbers appear here until they've been
 
 | Milestone | Metric | Result |
 | --- | --- | --- |
-| M1 Baseline | Throughput / p50 / p99 | — |
+| M1 Baseline | Throughput / p50 / p99 | 4,219 req/s, p50 30.1 ms, p99 35.1 ms through the gateway at 128 clients (`choice_short`). Gateway adds ~0.3–0.5 ms p50 and costs <5% throughput vs the worker alone. [Full results](bench/results/m1-20261115-034553/summary.md) |
 | M2 Cache | p50 at 0% / 50% / 90% hit rate | — |
 | M3 Failure | Error rate and recovery time when a worker dies | — |
 | M4 Rate limiting | p99 for normal traffic under overload | — |
@@ -200,13 +200,22 @@ Filled in as each milestone completes. No numbers appear here until they've been
 
 ## Running locally
 
-_Available from M5. Planned:_
+Requires Rust. For benchmarks, also [`oha`](https://github.com/hatoo/oha) and `jq`.
 
 ```bash
 git clone https://github.com/AnhadPahwa/verdict
 cd verdict
-docker compose up
+cargo build --release
+./target/release/worker-fake   # terminal 1: worker on :9001
+./target/release/gateway       # terminal 2: gateway on :8080
+
+bash bench/contract_test.sh http://127.0.0.1:8080   # 46 contract checks
+bash bench/m1.sh                                    # M1 benchmark (~6 min)
 ```
+
+Gateway settings: `WORKER_URL` (default `http://127.0.0.1:9001`) and `UPSTREAM_TIMEOUT_MS` (default 700).
+
+A Docker Compose setup arrives with M5.
 
 ## Repository layout
 
@@ -215,13 +224,13 @@ Cargo.toml      Workspace root
 CLAUDE.md       Rules for Claude Code in this repo
 gateway/        Rust gateway: routing, cache, rate limiting, batching
 worker-fake/    Rust fake worker implementing /decide
+bench/          Contract tests, load-test scripts and results
 docs/           Design doc and diagrams
 ```
 
 Added when the relevant milestone starts:
 
 ```
-bench/          Load-test scripts and raw results (M1)
 worker-model/   Rust worker serving the trained model via candle (Phase 5)
 training/       Python: pretraining, decision head, calibration (Phase 4)
 ```
