@@ -191,7 +191,7 @@ Filled in as each milestone completes. No numbers appear here until they've been
 
 | Milestone | Metric | Result |
 | --- | --- | --- |
-| M1 Baseline | Throughput / p50 / p99 | 4,219 req/s, p50 30.1 ms, p99 35.1 ms through the gateway at 128 clients (`choice_short`). Gateway adds ~0.3–0.5 ms p50 and costs <5% throughput vs the worker alone. [Full results](bench/results/m1-20261115-034553/summary.md) |
+| M1 Baseline | Throughput / p50 / p99 | 4,219 req/s, p50 30.1 ms, p99 35.1 ms through the gateway at 128 clients (`choice_short`). Gateway adds 0.3–1.4 ms p50 depending on load (lowest at 1 and 128 clients, highest at 32) and costs <5% throughput vs the worker alone. [Full results](bench/results/m1-20261115-034553/summary.md) |
 | M2 Cache | p50 at 0% / 50% / 90% hit rate | — |
 | M3 Failure | Error rate and recovery time when a worker dies | — |
 | M4 Rate limiting | p99 for normal traffic under overload | — |
